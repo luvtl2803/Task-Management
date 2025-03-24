@@ -9,11 +9,11 @@ plugins {
 }
 
 android {
-    namespace = "com.anhq.todolist"
+    namespace = "com.anhq.taskmanagement"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.anhq.todolist"
+        applicationId = "com.anhq.taskmanagement"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
