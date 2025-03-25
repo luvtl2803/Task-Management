@@ -21,8 +21,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class EditTaskViewModel @Inject constructor(
-    private val taskRepository: TaskRepository,
-    private val savedStateHandle: SavedStateHandle
+    private val taskRepository: TaskRepository, private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     val id = savedStateHandle.toRoute<EditTaskRoute>().id
 
@@ -71,6 +70,7 @@ class EditTaskViewModel @Inject constructor(
                 } else {
                     _date.value = ""
                     _time.value = ""
+                    _eventId.value = null
                 }
             }
         }
@@ -82,9 +82,14 @@ class EditTaskViewModel @Inject constructor(
 
     fun onTimeInMillsChange(timeInMills: Long) {
         _timeInMills.value = timeInMills
-        val calendar = Calendar.getInstance().apply { this.timeInMillis = timeInMills }
-        _date.value = dateFormatter.format(calendar.time)
-        _time.value = timeFormatter.format(calendar.time)
+        if (timeInMills > 0) {
+            val calendar = Calendar.getInstance().apply { this.timeInMillis = timeInMills }
+            _date.value = dateFormatter.format(calendar.time)
+            _time.value = timeFormatter.format(calendar.time)
+        } else {
+            _date.value = ""
+            _time.value = ""
+        }
     }
 
     fun onTitleChange(title: String) {
@@ -103,6 +108,7 @@ class EditTaskViewModel @Inject constructor(
         _timeInMills.value = 0L
         _date.value = ""
         _time.value = ""
+        _eventId.value = null
     }
 
     fun updateTask() {
@@ -111,7 +117,7 @@ class EditTaskViewModel @Inject constructor(
                 id = id,
                 title = title.value,
                 description = description.value,
-                timeInMills = timeInMills.value
+                timeInMills = if (timeInMills.value > 0) timeInMills.value else null
             )
             taskRepository.updateTask(updatedTask)
         }

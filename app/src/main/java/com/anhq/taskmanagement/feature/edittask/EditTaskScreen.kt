@@ -83,21 +83,24 @@ internal fun EditTaskRoute(
         onUpdateTaskClick = {
             if (title.isNotBlank() && description.isNotBlank()) {
                 viewModel.updateTask()
-                if (!PermissionHelper.hasCalendarPermissions(context)) {
-                    PermissionHelper.requestCalendarPermissions(context as Activity)
+                if (timeInMills > 0L) {
+                    if (!PermissionHelper.hasCalendarPermissions(context)) {
+                        PermissionHelper.requestCalendarPermissions(context as Activity)
+                    } else {
+                        updateCalendarEvent(
+                            context = context,
+                            title = title,
+                            description = description,
+                            timeInMills = timeInMills,
+                            eventId = eventId,
+                            onEventIdUpdated = { newEventId -> viewModel.updateEventId(newEventId) }
+                        )
+                    }
                 } else {
-                    updateCalendarEvent(
-                        context = context,
-                        title = title,
-                        description = description,
-                        timeInMills = timeInMills,
-                        eventId = eventId,
-                        onEventIdUpdated = { newEventId -> viewModel.updateEventId(newEventId) }
-                    )
+                    Toast.makeText(context, "Task updated without calendar event", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(context, "Title or Description cannot be empty", Toast.LENGTH_SHORT)
-                    .show()
+                Toast.makeText(context, "Title or Description cannot be empty", Toast.LENGTH_SHORT).show()
             }
         },
         title = title,
