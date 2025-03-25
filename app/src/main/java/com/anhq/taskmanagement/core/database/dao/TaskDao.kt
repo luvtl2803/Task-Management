@@ -23,5 +23,7 @@ interface TaskDao {
     @Query("DELETE FROM task_entity")
     suspend fun clear()
     @Update
-    suspend fun updateTasks(tasks: List<TaskEntity>)
+    suspend fun updateTasks(task: List<TaskEntity>)
+    @Update
+    suspend fun updateTask(task: TaskEntity)
 }

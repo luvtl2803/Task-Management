@@ -1,4 +1,4 @@
-package com.anhq.taskmanagement.app.ui.dialog
+package com.anhq.taskmanagement.core.ui.dialog
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

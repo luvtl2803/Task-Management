@@ -9,14 +9,12 @@ data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val title: String,
     val description: String,
-    val time: String?,
-    val date: String?
+    val timeInMills: Long?
 )
 
 fun NetworkTask.toTaskEntity() = TaskEntity(
     id = id,
     title = title,
     description = description,
-    time = time,
-    date = date
+    timeInMills = timeInMills,
 )

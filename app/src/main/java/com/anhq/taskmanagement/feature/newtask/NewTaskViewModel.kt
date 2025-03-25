@@ -7,7 +7,11 @@ import com.anhq.taskmanagement.core.model.Task
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -15,31 +19,40 @@ class NewTaskViewModel @Inject constructor(
     private val taskRepository: TaskRepository
 ) : ViewModel() {
 
+    private val dateFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+    private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+
     private val _name = MutableStateFlow("")
-    val name: StateFlow<String> = _name
-    private val _content = MutableStateFlow("")
-    var description: StateFlow<String> = _content
+    val name: StateFlow<String> = _name.asStateFlow()
+
+    private val _description = MutableStateFlow("")
+    val description: StateFlow<String> = _description.asStateFlow()
+
     private val _time = MutableStateFlow("")
-    var time: StateFlow<String> = _time
+    val time: StateFlow<String> = _time.asStateFlow()
+
+    private val _timeInMills = MutableStateFlow(0L)
+    val timeInMills: StateFlow<Long> = _timeInMills.asStateFlow()
+
     private val _date = MutableStateFlow("")
-    var date: StateFlow<String> = _date
+    val date: StateFlow<String> = _date.asStateFlow()
+
     private val _isShowTimePicker = MutableStateFlow(false)
-    var isShowTimePicker: StateFlow<Boolean> = _isShowTimePicker
+    val isShowTimePicker: StateFlow<Boolean> = _isShowTimePicker.asStateFlow()
 
     fun onTitleChange(title: String) {
         _name.value = title
     }
 
     fun onContentChange(content: String) {
-        _content.value = content
+        _description.value = content
     }
 
-    fun onTimeChange(time: String) {
-        _time.value = time
-    }
-
-    fun onDateChange(date: String) {
-        _date.value = date
+    fun onTimeInMillsChange(timeInMills: Long) {
+        _timeInMills.value = timeInMills
+        val calendar = Calendar.getInstance().apply { this.timeInMillis = timeInMills }
+        _date.value = dateFormatter.format(calendar.time)
+        _time.value = timeFormatter.format(calendar.time)
     }
 
     fun onShowTimePicker(isShowTimePicker: Boolean) {
@@ -52,8 +65,7 @@ class NewTaskViewModel @Inject constructor(
                 id = 0,
                 title = name.value,
                 description = description.value,
-                time = time.value,
-                date = date.value
+                timeInMills = if (_timeInMills.value == 0L) null else _timeInMills.value
             )
             taskRepository.insertTask(task)
         }

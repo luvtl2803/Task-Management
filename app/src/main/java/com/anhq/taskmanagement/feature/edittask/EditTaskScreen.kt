@@ -1,9 +1,8 @@
 package com.anhq.taskmanagement.feature.edittask
 
-import android.Manifest
 import android.app.Activity
 import android.content.ContentValues
-import android.content.pm.PackageManager
+import android.content.Context
 import android.provider.CalendarContract
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -26,7 +25,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
-import androidx.compose.material3.DatePickerState
 import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -36,8 +34,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TimeInput
-import androidx.compose.material3.TimePickerState
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -57,36 +55,27 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anhq.taskmanagement.R
 import com.anhq.taskmanagement.core.designsystem.theme.body2
-import com.anhq.taskmanagement.core.designsystem.theme.body3_bold
 import com.anhq.taskmanagement.core.designsystem.theme.body3_medium
-import com.anhq.taskmanagement.core.model.Task
-import java.text.SimpleDateFormat
+import com.anhq.taskmanagement.core.help.PermissionHelper
 import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 import java.util.TimeZone
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EditTaskRoute(
     onBackHomeClick: () -> Unit,
     viewModel: EditTaskViewModel = hiltViewModel(),
 ) {
-    val task by viewModel.task.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val title by viewModel.title.collectAsStateWithLifecycle()
     val description by viewModel.description.collectAsStateWithLifecycle()
     val time by viewModel.time.collectAsStateWithLifecycle()
     val date by viewModel.date.collectAsStateWithLifecycle()
+    val timeInMills by viewModel.timeInMills.collectAsStateWithLifecycle()
     val isShowTimePicker by viewModel.isShowTimePicker.collectAsStateWithLifecycle()
-    var selectedDate by remember { mutableStateOf<Long?>(null) }
-    var selectedTime by remember { mutableStateOf<Long?>(null) }
     val eventId by viewModel.eventId.collectAsStateWithLifecycle()
 
     EditTaskScreen(
@@ -94,84 +83,17 @@ internal fun EditTaskRoute(
         onUpdateTaskClick = {
             if (title.isNotBlank() && description.isNotBlank()) {
                 viewModel.updateTask()
-
-                val permissions = arrayOf(
-                    Manifest.permission.READ_CALENDAR,
-                    Manifest.permission.WRITE_CALENDAR
-                )
-                if (ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.READ_CALENDAR
-                    ) != PackageManager.PERMISSION_GRANTED ||
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.WRITE_CALENDAR
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    ActivityCompat.requestPermissions(context as Activity, permissions, 1001)
+                if (!PermissionHelper.hasCalendarPermissions(context)) {
+                    PermissionHelper.requestCalendarPermissions(context as Activity)
                 } else {
-                    val contentResolver = context.contentResolver
-
-                    eventId?.let { id ->
-                        contentResolver.delete(
-                            CalendarContract.Events.CONTENT_URI,
-                            "${CalendarContract.Events._ID}=?",
-                            arrayOf(id.toString())
-                        )
-                    }
-
-                    val calendar = Calendar.getInstance().apply {
-                        if (selectedDate != null) {
-                            timeInMillis = selectedDate!!
-                        }
-                        if (selectedTime != null) {
-                            val timeCal =
-                                Calendar.getInstance().apply { timeInMillis = selectedTime!! }
-                            set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
-                            set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
-                            set(Calendar.SECOND, 0)
-                            set(Calendar.MILLISECOND, 0)
-                        }
-                    }
-
-                    val startInMillis = calendar.timeInMillis
-                    val endInMillis = startInMillis + 1 * 60 * 60 * 1000
-
-                    val values = ContentValues().apply {
-                        put(CalendarContract.Events.DTSTART, startInMillis)
-                        put(CalendarContract.Events.DTEND, endInMillis)
-                        put(CalendarContract.Events.TITLE, title)
-                        put(CalendarContract.Events.DESCRIPTION, description)
-                        put(CalendarContract.Events.CALENDAR_ID, 1L)
-                        put(CalendarContract.Events.HAS_ALARM, true)
-                        put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
-                    }
-                    val uri = contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
-
-                    if (uri != null) {
-                        val newEventId = uri.lastPathSegment?.toLongOrNull()
-                        viewModel.updateEventId(newEventId) // Save new event ID
-                        val reminderValues = ContentValues().apply {
-                            put(CalendarContract.Reminders.EVENT_ID, newEventId)
-                            put(CalendarContract.Reminders.MINUTES, 10)
-                            put(
-                                CalendarContract.Reminders.METHOD,
-                                CalendarContract.Reminders.METHOD_ALERT
-                            )
-                        }
-                        contentResolver.insert(
-                            CalendarContract.Reminders.CONTENT_URI,
-                            reminderValues
-                        )
-                        Toast.makeText(context, "Task updated successfully", Toast.LENGTH_SHORT)
-                            .show()
-                    } else {
-                        Toast.makeText(
-                            context,
-                            "Failed to update calendar event",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
+                    updateCalendarEvent(
+                        context = context,
+                        title = title,
+                        description = description,
+                        timeInMills = timeInMills,
+                        eventId = eventId,
+                        onEventIdUpdated = { newEventId -> viewModel.updateEventId(newEventId) }
+                    )
                 }
             } else {
                 Toast.makeText(context, "Title or Description cannot be empty", Toast.LENGTH_SHORT)
@@ -180,53 +102,89 @@ internal fun EditTaskRoute(
         },
         title = title,
         onTitleChange = { viewModel.onTitleChange(it) },
-        content = description,
+        description = description,
         onContentChange = { viewModel.onDescriptionChange(it) },
-        task = task,
         time = time,
         date = date,
-        isShowTimePicker = isShowTimePicker,
-        onShowTimePicker = { viewModel.onShowTimePicker(it) },
-        onSelectedTime = { timePickerState ->
-            if (timePickerState != null) {
-                val cal = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, timePickerState.hour)
-                    set(Calendar.MINUTE, timePickerState.minute)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                selectedTime = cal.timeInMillis
-                val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
-                viewModel.onTimeChange(formatter.format(cal.time))
-            }
-        },
-        onSelectedDate = { datePickerState ->
-            if (datePickerState?.selectedDateMillis != null) {
-                selectedDate = datePickerState.selectedDateMillis
-                val date = Date(selectedDate!!)
-                val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                viewModel.onDateChange(formatter.format(date))
-            }
-        }
+        timeInMills = timeInMills,
+        onTimeInMillsChange = { viewModel.onTimeInMillsChange(it) },
+        onClearAlarmClick = { viewModel.clearAlarm() },
+        isShowPickerDialog = isShowTimePicker,
+        onShowTimePicker = { viewModel.onShowTimePicker(it) }
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private fun updateCalendarEvent(
+    context: Context,
+    title: String,
+    description: String,
+    timeInMills: Long,
+    eventId: Long?,
+    onEventIdUpdated: (Long?) -> Unit
+) {
+    val contentResolver = context.contentResolver
+
+    eventId?.let { id ->
+        contentResolver.delete(
+            CalendarContract.Events.CONTENT_URI,
+            "${CalendarContract.Events._ID}=?",
+            arrayOf(id.toString())
+        )
+        onEventIdUpdated(null)
+    }
+
+    if (timeInMills <= 0) {
+        Toast.makeText(context, "Calendar event removed", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val calendar = Calendar.getInstance().apply {
+        timeInMillis = timeInMills
+    }
+    val startInMillis = calendar.timeInMillis
+    val endInMillis = startInMillis + 1 * 60 * 60 * 1000
+
+    val values = ContentValues().apply {
+        put(CalendarContract.Events.DTSTART, startInMillis)
+        put(CalendarContract.Events.DTEND, endInMillis)
+        put(CalendarContract.Events.TITLE, title)
+        put(CalendarContract.Events.DESCRIPTION, description)
+        put(CalendarContract.Events.CALENDAR_ID, 1L)
+        put(CalendarContract.Events.HAS_ALARM, true)
+        put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+    }
+
+    val uri = contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
+    if (uri != null) {
+        val newEventId = uri.lastPathSegment?.toLongOrNull()
+        onEventIdUpdated(newEventId)
+        val reminderValues = ContentValues().apply {
+            put(CalendarContract.Reminders.EVENT_ID, newEventId)
+            put(CalendarContract.Reminders.MINUTES, 10)
+            put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+        }
+        contentResolver.insert(CalendarContract.Reminders.CONTENT_URI, reminderValues)
+        Toast.makeText(context, "Task updated successfully", Toast.LENGTH_SHORT).show()
+    } else {
+        Toast.makeText(context, "Failed to update calendar event", Toast.LENGTH_SHORT).show()
+    }
+}
+
 @Composable
 fun EditTaskScreen(
     onBackHomeClick: () -> Unit,
     onUpdateTaskClick: () -> Unit,
-    task: Task,
+    onClearAlarmClick: () -> Unit,
     title: String,
     onTitleChange: (String) -> Unit,
-    content: String,
+    description: String,
     onContentChange: (String) -> Unit,
     time: String,
     date: String,
-    isShowTimePicker: Boolean,
-    onShowTimePicker: (Boolean) -> Unit,
-    onSelectedTime: (TimePickerState?) -> Unit,
-    onSelectedDate: (DatePickerState?) -> Unit
+    timeInMills: Long,
+    onTimeInMillsChange: (Long) -> Unit,
+    isShowPickerDialog: Boolean,
+    onShowTimePicker: (Boolean) -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -270,7 +228,7 @@ fun EditTaskScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
-                    value = task.title,
+                    value = title,
                     label = { Text("Title: ") },
                     onValueChange = onTitleChange
                 )
@@ -279,71 +237,81 @@ fun EditTaskScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
-                    value = task.description,
+                    value = description,
                     label = { Text("Description: ") },
                     onValueChange = onContentChange
                 )
-                Spacer(modifier = Modifier.height(20.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 5.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+
+                Button(
+                    modifier = Modifier.padding(10.dp),
+                    onClick = { onShowTimePicker(true) }
                 ) {
-                    OutlinedTextField(
-                        modifier = Modifier.width(200.dp),
-                        value = task.date!!,
-                        label = { Text("Alarm Date: ") },
-                        maxLines = 1,
-                        onValueChange = {},
-                        enabled = false,
+                    Icon(
+                        ImageVector.vectorResource(R.drawable.ic_add_alarm_black),
+                        contentDescription = "Add Time"
                     )
-                    OutlinedTextField(
-                        modifier = Modifier.width(150.dp),
-                        value = task.time!!,
-                        label = { Text("Alarm Time: ") },
-                        maxLines = 1,
-                        onValueChange = {},
-                        enabled = false,
-                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add Alarm", style = MaterialTheme.typography.titleSmall)
                 }
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.End)
-                        .padding(vertical = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Button(
-                        modifier = Modifier.padding(10.dp),
-                        onClick = { onShowTimePicker(true) }
+                if (date.isNotBlank() && time.isNotBlank()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            ImageVector.vectorResource(R.drawable.ic_delete_alarm),
-                            contentDescription = "Clear Alarm"
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Clear Alarm", style = MaterialTheme.typography.titleSmall)
-                    }
-                    Button(
-                        modifier = Modifier.padding(10.dp),
-                        onClick = { onShowTimePicker(true) }
-                    ) {
-                        Icon(
-                            ImageVector.vectorResource(R.drawable.ic_add_alarm_black),
-                            contentDescription = "Add Time"
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Add Alarm", style = MaterialTheme.typography.titleSmall)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 5.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            OutlinedTextField(
+                                modifier = Modifier.width(200.dp),
+                                value = date,
+                                label = { Text("Alarm Date: ") },
+                                maxLines = 1,
+                                onValueChange = {},
+                                enabled = false
+                            )
+                            OutlinedTextField(
+                                modifier = Modifier.width(150.dp),
+                                value = time,
+                                label = { Text("Alarm Time: ") },
+                                maxLines = 1,
+                                onValueChange = {},
+                                enabled = false
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 20.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Button(
+                                modifier = Modifier,
+                                onClick = {
+                                    onClearAlarmClick()
+                                    onShowTimePicker(false)
+                                }
+                            ) {
+                                Icon(
+                                    ImageVector.vectorResource(R.drawable.ic_delete_alarm),
+                                    contentDescription = "Clear Alarm"
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Clear Alarm", style = MaterialTheme.typography.titleSmall)
+                            }
+                        }
                     }
                 }
             }
-            if (isShowTimePicker) {
+
+            if (isShowPickerDialog) {
                 DateTimePickerDialog(
-                    onSelectedTime = onSelectedTime,
-                    onSelectedDate = onSelectedDate,
+                    initialTimeInMillis = timeInMills,
+                    onSelectedTimeInMillis = onTimeInMillsChange,
                     onDismiss = { onShowTimePicker(false) }
                 )
             }
@@ -354,14 +322,17 @@ fun EditTaskScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DateTimePickerDialog(
-    onSelectedTime: (TimePickerState?) -> Unit,
-    onSelectedDate: (DatePickerState?) -> Unit,
+    initialTimeInMillis: Long,
+    onSelectedTimeInMillis: (Long) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val currentTime = Calendar.getInstance()
+    val calendar = Calendar.getInstance()
+    val currentTime = Calendar.getInstance().apply {
+        timeInMillis = if (initialTimeInMillis > 0) initialTimeInMillis else calendar.timeInMillis
+    }
 
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = currentTime.timeInMillis,
+        initialSelectedDateMillis = if (initialTimeInMillis > 0) initialTimeInMillis else calendar.timeInMillis,
         selectableDates = PresentSelectableDates,
         initialDisplayMode = DisplayMode.Input
     )
@@ -394,13 +365,27 @@ fun DateTimePickerDialog(
         ) {
             Text(
                 text = "Select Date and Time",
+                color = Color.White,
                 style = MaterialTheme.typography.body2
             )
 
             DatePicker(
                 modifier = Modifier,
                 state = datePickerState,
-                colors = DatePickerDefaults.colors(containerColor = Color.DarkGray),
+                colors = DatePickerDefaults.colors(
+                    containerColor = Color.DarkGray,
+                    headlineContentColor = Color.White,
+                    titleContentColor = Color.White,
+                    dateTextFieldColors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.LightGray,
+                        focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.LightGray
+                    )
+                ),
                 title = {
                     Text(
                         modifier = Modifier.padding(start = 10.dp),
@@ -415,6 +400,7 @@ fun DateTimePickerDialog(
                     .align(Alignment.Start)
                     .padding(start = 10.dp),
                 text = "Time:",
+                color = Color.White,
                 style = MaterialTheme.typography.body3_medium
             )
             TimeInput(
@@ -422,19 +408,25 @@ fun DateTimePickerDialog(
             )
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 Button(onClick = onDismiss) {
-                    Text("Dismiss", style = MaterialTheme.typography.body3_bold)
+                    Text("Dismiss", style = MaterialTheme.typography.titleSmall)
                 }
                 Button(onClick = {
-                    onSelectedDate(datePickerState)
-                    onSelectedTime(timePickerState)
+                    val selectedDateMillis = datePickerState.selectedDateMillis ?: return@Button
+                    val calendar = Calendar.getInstance().apply {
+                        timeInMillis = selectedDateMillis
+                        set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                        set(Calendar.MINUTE, timePickerState.minute)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    onSelectedTimeInMillis(calendar.timeInMillis)
                     onDismiss()
                 }) {
-                    Text("Confirm", style = MaterialTheme.typography.body3_bold)
+                    Text("Confirm", style = MaterialTheme.typography.titleSmall)
                 }
             }
         }
@@ -459,35 +451,28 @@ object PresentSelectableDates : SelectableDates {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Preview
 @Composable
 fun PreviewEditTaskScreen() {
     var title by remember { mutableStateOf("My Task") }
     var content by remember { mutableStateOf("Task content here") }
-    val time by remember { mutableStateOf("10:30") }
-    val date by remember { mutableStateOf("21/03/2025") }
-    var isShowTimePicker by remember { mutableStateOf(true) }
+    var time by remember { mutableStateOf("1") }
+    var date by remember { mutableStateOf("1") }
+    var isShowTimePicker by remember { mutableStateOf(false) }
 
     EditTaskScreen(
-        onBackHomeClick = { /* Handle back action */ },
-        onUpdateTaskClick = { /* Handle update task action */ },
+        onBackHomeClick = {  },
+        onUpdateTaskClick = { },
+        onClearAlarmClick = { time = ""; date = "" },
         title = title,
         onTitleChange = { title = it },
-        content = content,
+        description = content,
         onContentChange = { content = it },
         time = time,
         date = date,
-        isShowTimePicker = isShowTimePicker,
-        onShowTimePicker = { isShowTimePicker = it },
-        onSelectedTime = { /* Handle selected time */ },
-        onSelectedDate = { /* Handle selected date */ },
-        task = Task(
-            id = 1,
-            title = "My Task",
-            description = "Task content here",
-            date = "21/03/2025",
-            time = "10:30"
-        )
+        timeInMills = 0L,
+        onTimeInMillsChange = {},
+        isShowPickerDialog = isShowTimePicker,
+        onShowTimePicker = { isShowTimePicker = it }
     )
 }

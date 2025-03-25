@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -22,6 +25,15 @@ class EditTaskViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     val id = savedStateHandle.toRoute<EditTaskRoute>().id
+
+    val task = taskRepository.getTaskById(id).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = Task(0, "", "", 0L)
+    )
+
+    private val dateFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+    private val timeFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     private val _title = MutableStateFlow("")
     val title: StateFlow<String> = _title.asStateFlow()
@@ -35,25 +47,44 @@ class EditTaskViewModel @Inject constructor(
     private val _date = MutableStateFlow("")
     val date: StateFlow<String> = _date.asStateFlow()
 
+    private val _timeInMills = MutableStateFlow(0L)
+    val timeInMills: StateFlow<Long> = _timeInMills.asStateFlow()
+
     private val _isShowTimePicker = MutableStateFlow(false)
     val isShowTimePicker: StateFlow<Boolean> = _isShowTimePicker.asStateFlow()
 
     private val _eventId = MutableStateFlow<Long?>(null)
     val eventId: StateFlow<Long?> = _eventId.asStateFlow()
 
-
-    val task = taskRepository.getTaskById(id).stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = Task(0, "", "", "00:00", "01/01/2010")
-    )
-
-    fun updateTask() {
-
+    init {
+        viewModelScope.launch {
+            task.collect { currentTask ->
+                _title.value = currentTask.title
+                _description.value = currentTask.description
+                _timeInMills.value = currentTask.timeInMills ?: 0L
+                if (currentTask.timeInMills != null && currentTask.timeInMills > 0) {
+                    val calendar = Calendar.getInstance().apply {
+                        timeInMillis = currentTask.timeInMills
+                    }
+                    _date.value = dateFormatter.format(calendar.time)
+                    _time.value = timeFormatter.format(calendar.time)
+                } else {
+                    _date.value = ""
+                    _time.value = ""
+                }
+            }
+        }
     }
 
     fun updateEventId(newEventId: Long?) {
         _eventId.value = newEventId
+    }
+
+    fun onTimeInMillsChange(timeInMills: Long) {
+        _timeInMills.value = timeInMills
+        val calendar = Calendar.getInstance().apply { this.timeInMillis = timeInMills }
+        _date.value = dateFormatter.format(calendar.time)
+        _time.value = timeFormatter.format(calendar.time)
     }
 
     fun onTitleChange(title: String) {
@@ -64,28 +95,25 @@ class EditTaskViewModel @Inject constructor(
         _description.value = description
     }
 
-    fun onTimeChange(time: String) {
-        _time.value = time
-    }
-
-    fun onDateChange(date: String) {
-        _date.value = date
-    }
-
     fun onShowTimePicker(isShowTimePicker: Boolean) {
         _isShowTimePicker.value = isShowTimePicker
     }
 
-    fun save() {
+    fun clearAlarm() {
+        _timeInMills.value = 0L
+        _date.value = ""
+        _time.value = ""
+    }
+
+    fun updateTask() {
         viewModelScope.launch {
-            val task = Task(
-                id = 0,
+            val updatedTask = Task(
+                id = id,
                 title = title.value,
                 description = description.value,
-                time = time.value,
-                date = date.value
+                timeInMills = timeInMills.value
             )
-            taskRepository.insertTask(task)
+            taskRepository.updateTask(updatedTask)
         }
     }
 }

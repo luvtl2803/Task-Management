@@ -11,7 +11,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private  val taskRepository: TaskRepository
+    private val taskRepository: TaskRepository
 ) : ViewModel() {
 
     val tasks = taskRepository.getTasks().stateIn(
@@ -23,12 +23,6 @@ class HomeViewModel @Inject constructor(
     fun deleteTaskById(taskId: Int) {
         viewModelScope.launch {
             taskRepository.deleteTaskById(taskId)
-        }
-    }
-
-    fun clearAllTask() {
-        viewModelScope.launch {
-            taskRepository.clearAllTask()
         }
     }
 }

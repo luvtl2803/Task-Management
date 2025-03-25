@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDefaults
-import androidx.compose.material3.DatePickerState
 import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -36,8 +35,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TimeInput
-import androidx.compose.material3.TimePickerState
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -64,13 +63,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anhq.taskmanagement.R
 import com.anhq.taskmanagement.core.designsystem.theme.body2
 import com.anhq.taskmanagement.core.designsystem.theme.body3_medium
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 import java.util.TimeZone
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NewTaskRoute(
     onBackHomeClick: () -> Unit,
@@ -79,11 +74,10 @@ internal fun NewTaskRoute(
     val context = LocalContext.current
     val title by viewModel.name.collectAsStateWithLifecycle()
     val description by viewModel.description.collectAsStateWithLifecycle()
-    val time by viewModel.time.collectAsStateWithLifecycle()
-    val date by viewModel.date.collectAsStateWithLifecycle()
     val isShowTimePicker by viewModel.isShowTimePicker.collectAsStateWithLifecycle()
-    var selectedDate by remember { mutableStateOf<Long?>(null) }
-    var selectedTime by remember { mutableStateOf<Long?>(null) }
+    val initialTimeInMillis by viewModel.timeInMills.collectAsStateWithLifecycle(initialValue = 0L)
+    val date by viewModel.date.collectAsStateWithLifecycle(initialValue = "")
+    val time by viewModel.time.collectAsStateWithLifecycle(initialValue = "")
 
     NewTaskScreen(
         onBackHomeClick = onBackHomeClick,
@@ -91,71 +85,67 @@ internal fun NewTaskRoute(
             if (title.isNotBlank() && description.isNotBlank()) {
                 viewModel.save()
 
-                val permissions = arrayOf(
-                    Manifest.permission.READ_CALENDAR,
-                    Manifest.permission.WRITE_CALENDAR
-                )
-                if (ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.READ_CALENDAR
-                    ) != PackageManager.PERMISSION_GRANTED ||
-                    ContextCompat.checkSelfPermission(
-                        context,
+                if (initialTimeInMillis != 0L) {
+                    val permissions = arrayOf(
+                        Manifest.permission.READ_CALENDAR,
                         Manifest.permission.WRITE_CALENDAR
-                    ) != PackageManager.PERMISSION_GRANTED
-                ) {
-                    ActivityCompat.requestPermissions(context as Activity, permissions, 1001)
-                } else {
-                    val contentResolver = context.contentResolver
-                    val calID: Long = 1
-
-                    val calendar = Calendar.getInstance().apply {
-                        if (selectedDate != null) {
-                            timeInMillis = selectedDate!!
-                        }
-                        if (selectedTime != null) {
-                            val timeCal =
-                                Calendar.getInstance().apply { timeInMillis = selectedTime!! }
-                            set(Calendar.HOUR_OF_DAY, timeCal.get(Calendar.HOUR_OF_DAY))
-                            set(Calendar.MINUTE, timeCal.get(Calendar.MINUTE))
-                            set(Calendar.SECOND, 0)
-                            set(Calendar.MILLISECOND, 0)
-                        }
-                    }
-
-                    val startInMillis = calendar.timeInMillis
-                    val endInMillis = startInMillis + 1 * 60 * 60 * 1000
-
-                    val values = ContentValues().apply {
-                        put(CalendarContract.Events.DTSTART, startInMillis)
-                        put(CalendarContract.Events.DTEND, endInMillis)
-                        put(CalendarContract.Events.TITLE, title)
-                        put(CalendarContract.Events.DESCRIPTION, description)
-                        put(CalendarContract.Events.CALENDAR_ID, calID)
-                        put(CalendarContract.Events.HAS_ALARM, true)
-                        put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
-                    }
-                    val uri = contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
-
-                    if (uri != null) {
-                        val eventID = uri.lastPathSegment?.toLongOrNull()
-                        val reminderValues = ContentValues().apply {
-                            put(CalendarContract.Reminders.EVENT_ID, eventID)
-                            put(CalendarContract.Reminders.MINUTES, 10)
-                            put(
-                                CalendarContract.Reminders.METHOD,
-                                CalendarContract.Reminders.METHOD_ALERT
-                            )
-                        }
-                        contentResolver.insert(
-                            CalendarContract.Reminders.CONTENT_URI,
-                            reminderValues
-                        )
-                        Toast.makeText(context, "Event added successfully", Toast.LENGTH_SHORT)
-                            .show()
+                    )
+                    if (ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.READ_CALENDAR
+                        ) != PackageManager.PERMISSION_GRANTED ||
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.WRITE_CALENDAR
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        ActivityCompat.requestPermissions(context as Activity, permissions, 1001)
                     } else {
-                        Toast.makeText(context, "Failed to add event", Toast.LENGTH_SHORT).show()
+                        val contentResolver = context.contentResolver
+                        val calID: Long = 1
+
+                        val calendar = Calendar.getInstance().apply {
+                            timeInMillis = initialTimeInMillis
+                        }
+
+                        val startInMillis = calendar.timeInMillis
+                        val endInMillis = startInMillis + 1 * 60 * 60 * 1000
+
+                        val values = ContentValues().apply {
+                            put(CalendarContract.Events.DTSTART, startInMillis)
+                            put(CalendarContract.Events.DTEND, endInMillis)
+                            put(CalendarContract.Events.TITLE, title)
+                            put(CalendarContract.Events.DESCRIPTION, description)
+                            put(CalendarContract.Events.CALENDAR_ID, calID)
+                            put(CalendarContract.Events.HAS_ALARM, true)
+                            put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+                        }
+                        val uri =
+                            contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
+
+                        if (uri != null) {
+                            val eventID = uri.lastPathSegment?.toLongOrNull()
+                            val reminderValues = ContentValues().apply {
+                                put(CalendarContract.Reminders.EVENT_ID, eventID)
+                                put(CalendarContract.Reminders.MINUTES, 10)
+                                put(
+                                    CalendarContract.Reminders.METHOD,
+                                    CalendarContract.Reminders.METHOD_ALERT
+                                )
+                            }
+                            contentResolver.insert(
+                                CalendarContract.Reminders.CONTENT_URI,
+                                reminderValues
+                            )
+                            Toast.makeText(context, "Event added successfully", Toast.LENGTH_SHORT)
+                                .show()
+                        } else {
+                            Toast.makeText(context, "Failed to add event", Toast.LENGTH_SHORT)
+                                .show()
+                        }
                     }
+                } else {
+                    Toast.makeText(context, "Task saved without alarm", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 Toast.makeText(context, "Title or Description cannot be empty", Toast.LENGTH_SHORT)
@@ -166,35 +156,17 @@ internal fun NewTaskRoute(
         onTitleChange = { viewModel.onTitleChange(it) },
         content = description,
         onContentChange = { viewModel.onContentChange(it) },
-        time = time,
         date = date,
-        isShowTimePicker = isShowTimePicker,
-        onShowTimePicker = { viewModel.onShowTimePicker(it) },
-        onSelectedTime = { timePickerState ->
-            if (timePickerState != null) {
-                val cal = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, timePickerState.hour)
-                    set(Calendar.MINUTE, timePickerState.minute)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                selectedTime = cal.timeInMillis
-                val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
-                viewModel.onTimeChange(formatter.format(cal.time))
-            }
+        time = time,
+        initialTimeInMillis = initialTimeInMillis,
+        onTimeInMillsChange = {
+            viewModel.onTimeInMillsChange(it)
         },
-        onSelectedDate = { datePickerState ->
-            if (datePickerState?.selectedDateMillis != null) {
-                selectedDate = datePickerState.selectedDateMillis
-                val date = Date(selectedDate!!)
-                val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                viewModel.onDateChange(formatter.format(date))
-            }
-        }
+        isShowTimePicker = isShowTimePicker,
+        onShowTimePicker = { viewModel.onShowTimePicker(it) }
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewTaskScreen(
     onBackHomeClick: () -> Unit,
@@ -203,13 +175,15 @@ fun NewTaskScreen(
     onTitleChange: (String) -> Unit,
     content: String,
     onContentChange: (String) -> Unit,
-    time: String,
     date: String,
+    time: String,
+    initialTimeInMillis: Long,
+    onTimeInMillsChange: (Long) -> Unit,
     isShowTimePicker: Boolean,
-    onShowTimePicker: (Boolean) -> Unit,
-    onSelectedTime: (TimePickerState?) -> Unit,
-    onSelectedDate: (DatePickerState?) -> Unit
+    onShowTimePicker: (Boolean) -> Unit
 ) {
+    val isAlarmSet = initialTimeInMillis != 0L
+
     Surface(
         modifier = Modifier
             .fillMaxSize()
@@ -266,28 +240,31 @@ fun NewTaskScreen(
                     onValueChange = onContentChange
                 )
                 Spacer(modifier = Modifier.height(20.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 5.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    OutlinedTextField(
-                        modifier = Modifier.width(200.dp),
-                        value = date,
-                        label = { Text("Alarm Date: ") },
-                        maxLines = 1,
-                        onValueChange = {},
-                        enabled = false
-                    )
-                    OutlinedTextField(
-                        modifier = Modifier.width(150.dp),
-                        value = time,
-                        label = { Text("Alarm Time: ") },
-                        maxLines = 1,
-                        onValueChange = {},
-                        enabled = false
-                    )
+
+                if (isAlarmSet) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 5.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        OutlinedTextField(
+                            modifier = Modifier.width(200.dp),
+                            value = date,
+                            label = { Text("Alarm Date: ") },
+                            maxLines = 1,
+                            onValueChange = {},
+                            enabled = false
+                        )
+                        OutlinedTextField(
+                            modifier = Modifier.width(150.dp),
+                            value = time,
+                            label = { Text("Alarm Time: ") },
+                            maxLines = 1,
+                            onValueChange = {},
+                            enabled = false
+                        )
+                    }
                 }
 
                 Row(
@@ -298,16 +275,20 @@ fun NewTaskScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Button(
-                        modifier = Modifier.padding(10.dp),
-                        onClick = { onShowTimePicker(true) }
-                    ) {
-                        Icon(
-                            ImageVector.vectorResource(R.drawable.ic_delete_alarm),
-                            contentDescription = "Clear Alarm"
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Clear Alarm", style = MaterialTheme.typography.titleSmall)
+                    if (isAlarmSet) {
+                        Button(
+                            modifier = Modifier.padding(10.dp),
+                            onClick = {
+                                onTimeInMillsChange(0L)
+                            }
+                        ) {
+                            Icon(
+                                ImageVector.vectorResource(R.drawable.ic_delete_alarm),
+                                contentDescription = "Clear Alarm"
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Clear Alarm", style = MaterialTheme.typography.titleSmall)
+                        }
                     }
                     Button(
                         modifier = Modifier.padding(10.dp),
@@ -322,10 +303,11 @@ fun NewTaskScreen(
                     }
                 }
             }
+
             if (isShowTimePicker) {
                 DateTimePickerDialog(
-                    onSelectedTime = onSelectedTime,
-                    onSelectedDate = onSelectedDate,
+                    initialTimeInMillis = if (initialTimeInMillis == 0L) Calendar.getInstance().timeInMillis else initialTimeInMillis,
+                    onSelectedTimeInMillis = onTimeInMillsChange,
                     onDismiss = { onShowTimePicker(false) }
                 )
             }
@@ -336,14 +318,16 @@ fun NewTaskScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DateTimePickerDialog(
-    onSelectedTime: (TimePickerState?) -> Unit,
-    onSelectedDate: (DatePickerState?) -> Unit,
+    initialTimeInMillis: Long,
+    onSelectedTimeInMillis: (Long) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val currentTime = Calendar.getInstance()
+    val currentTime = Calendar.getInstance().apply {
+        timeInMillis = initialTimeInMillis
+    }
 
     val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = currentTime.timeInMillis,
+        initialSelectedDateMillis = initialTimeInMillis,
         selectableDates = PresentSelectableDates,
         initialDisplayMode = DisplayMode.Input
     )
@@ -376,13 +360,27 @@ fun DateTimePickerDialog(
         ) {
             Text(
                 text = "Select Date and Time",
+                color = Color.White,
                 style = MaterialTheme.typography.body2
             )
 
             DatePicker(
                 modifier = Modifier,
                 state = datePickerState,
-                colors = DatePickerDefaults.colors(containerColor = Color.DarkGray),
+                colors = DatePickerDefaults.colors(
+                    containerColor = Color.DarkGray,
+                    headlineContentColor = Color.White,
+                    titleContentColor = Color.White,
+                    dateTextFieldColors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black,
+                        cursorColor = Color.Black,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.LightGray,
+                        focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.LightGray
+                    )
+                ),
                 title = {
                     Text(
                         modifier = Modifier.padding(start = 10.dp),
@@ -397,6 +395,7 @@ fun DateTimePickerDialog(
                     .align(Alignment.Start)
                     .padding(start = 10.dp),
                 text = "Time:",
+                color = Color.White,
                 style = MaterialTheme.typography.body3_medium
             )
             TimeInput(
@@ -404,16 +403,22 @@ fun DateTimePickerDialog(
             )
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 Button(onClick = onDismiss) {
                     Text("Dismiss", style = MaterialTheme.typography.titleSmall)
                 }
                 Button(onClick = {
-                    onSelectedDate(datePickerState)
-                    onSelectedTime(timePickerState)
+                    val selectedDateMillis = datePickerState.selectedDateMillis ?: return@Button
+                    val calendar = Calendar.getInstance().apply {
+                        timeInMillis = selectedDateMillis
+                        set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                        set(Calendar.MINUTE, timePickerState.minute)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    onSelectedTimeInMillis(calendar.timeInMillis)
                     onDismiss()
                 }) {
                     Text("Confirm", style = MaterialTheme.typography.titleSmall)
@@ -441,28 +446,25 @@ object PresentSelectableDates : SelectableDates {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Preview
 @Composable
 fun PreviewNewTaskScreen() {
     var title by remember { mutableStateOf("My Task") }
     var content by remember { mutableStateOf("Task content here") }
-    val time by remember { mutableStateOf("10:30") }
-    val date by remember { mutableStateOf("21/03/2025") }
-    var isShowTimePicker by remember { mutableStateOf(true) }
+    var isShowTimePicker by remember { mutableStateOf(false) }
 
     NewTaskScreen(
-        onBackHomeClick = { /* Handle back action */ },
-        onSaveTaskClick = { /* Handle save task action */ },
+        onBackHomeClick = { },
+        onSaveTaskClick = { },
         title = title,
         onTitleChange = { title = it },
         content = content,
         onContentChange = { content = it },
-        time = time,
-        date = date,
         isShowTimePicker = isShowTimePicker,
         onShowTimePicker = { isShowTimePicker = it },
-        onSelectedTime = { /* Handle selected time */ },
-        onSelectedDate = { /* Handle selected date */ }
+        onTimeInMillsChange = {},
+        initialTimeInMillis = 0L,
+        date = "21/03/2025",
+        time = "20:01"
     )
 }

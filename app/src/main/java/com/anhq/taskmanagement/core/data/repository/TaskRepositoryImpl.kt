@@ -27,6 +27,12 @@ class TaskRepositoryImpl @Inject constructor(
         return taskDao.getTaskById(taskId).map { it.mapToTask() }
     }
 
+    override suspend fun updateTask(task: Task) {
+        withContext(Dispatchers.IO) {
+            taskDao.updateTask(task.toTaskEntity())
+        }
+    }
+
     override suspend fun insertTask(task: Task) {
         withContext(Dispatchers.IO) {
             taskDao.insertTask(task.toTaskEntity())

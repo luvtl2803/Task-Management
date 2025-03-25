@@ -13,8 +13,7 @@ import com.anhq.taskmanagement.feature.newtask.navigation.newTaskScreen
 
 @Composable
 fun ToDoNavHost(
-    appState: ToDoAppState,
-    modifier: Modifier = Modifier
+    appState: ToDoAppState, modifier: Modifier = Modifier
 ) {
     val navController = appState.navController
     NavHost(
@@ -31,10 +30,9 @@ fun ToDoNavHost(
             navController = navController
         )
         newTaskScreen(
-            onBackHomeClick = { appState.navigateToTopLevelDestination(TopLevelDestination.HOME) },
+            onBackHomeClick = { navController.popBackStack() },
         )
         editTaskScreen(
-            onBackHomeClick = { appState.navigateToTopLevelDestination(TopLevelDestination.HOME) }
-        )
+            onBackHomeClick = { navController.popBackStack() })
     }
 }

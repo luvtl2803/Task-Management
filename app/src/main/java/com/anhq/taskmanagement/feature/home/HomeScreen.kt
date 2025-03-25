@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,9 +32,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.anhq.taskmanagement.app.ui.dialog.DeleteConfirmationDialog
 import com.anhq.taskmanagement.core.designsystem.theme.body1
 import com.anhq.taskmanagement.core.model.Task
+import com.anhq.taskmanagement.core.ui.dialog.DeleteConfirmationDialog
 import com.anhq.taskmanagement.feature.edittask.navigation.navigateToEditTask
 
 @Composable
@@ -164,8 +163,8 @@ fun TaskCard(
 @Composable
 private fun HomePreview() {
     val tasks: List<Task> = listOf(
-        Task(1, "Buy groceries", "Buy milk, bread, and eggs", "24/03/2025", "14:30"),
-        Task(2, "Complete project", "Finish the Android app project", "25/03/2025", "09:00")
+        Task(1, "Buy groceries", "Buy milk, bread, and eggs", 0L),
+        Task(2, "Complete project", "Finish the Android app project", 0L)
     )
 
     HomeScreen(

@@ -8,6 +8,5 @@ data class NetworkTask(
     val id: Int,
     val title: String,
     val description: String,
-    @SerialName("time") val time: String? = null,
-    @SerialName("date") val date: String? = null
+    @SerialName("timeInMills") val timeInMills: Long? = 0,
 )

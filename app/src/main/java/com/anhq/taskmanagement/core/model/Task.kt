@@ -6,24 +6,21 @@ data class Task(
     val id: Int,
     val title: String,
     val description: String,
-    val time: String?,
-    val date: String?
+    val timeInMills: Long?
 )
 
 fun TaskEntity.toTask() = Task(
     id = id,
     title = title,
     description = description,
-    time = time,
-    date = date
+    timeInMills = timeInMills
 )
 
 fun Task.toTaskEntity() = TaskEntity(
     id = id,
     title = title,
     description = description,
-    time = time,
-    date = date
+    timeInMills = timeInMills
 )
 
 fun List<TaskEntity>.mapToTasks() = map { it.toTask() }
